@@ -2,18 +2,34 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	// "encoding/binary"
 	"fmt"
 	"net"
 	"os"
 )
 
 func main() {
+
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Print("Type server address: ")
 	scanner.Scan()
+	serverHost := scanner.Text()
+	serverPort := "9001"
+	serverAddr, err := net.ResolveUDPAddr("udp", serverHost+":"+serverPort)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	port := "9050"
-	addr, err := net.ResolveUDPAddr("udp", scanner.Text()+":"+port)
+	host := ""
+	fmt.Print("Type client port: ")
+	scanner.Scan()
+	port := scanner.Text()
+	if port == "" {
+		port = "9050"
+	}
+	addr, err := net.ResolveUDPAddr("udp", host+":"+port)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -24,18 +40,22 @@ func main() {
 	username := scanner.Text()
 	usernamelen := len(username)
 
-	conn, err := net.ListenUDP("udp", addr)
+	conn, err := net.DialUDP("udp", addr, serverAddr)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer conn.Close()
 
-	for {
-		buffer := make([]byte,4096)
+	//応答を受信
+	go readMsg(conn)
 
-		scanner := bufio.NewScanner(os.Stdin)
+	for {
 		fmt.Print("Type message to send: ")
+		// FIXME: 入力待ちの時にメッセージを受信するとその文字列が入力されてしまう
+		// 		  本当に標準入力に出力されているのか、表示上の問題なのかを切り分ける
+		//		  ←表示上の問題っぽい
+		//		  ←type message to sendを消せば見た目上はおかしくならなそう
 		scanner.Scan()
 		message := scanner.Text()
 
@@ -43,42 +63,33 @@ func main() {
 			return
 		}
 
-		fmt.Printf("Sending %v",message)
-		fullMessage :=  // usernamelen + username + messageのバイナリ
+		fmt.Printf("Sending %v\n", message)
+
+		// usernamelen: int + username: string + message: stringのバイナリ
+		fullMessageBuf := bytes.NewBuffer([]byte{})
+		fullMessageBuf.Write([]byte{byte(usernamelen)})
+		fullMessageBuf.Write([]byte(username))
+		fullMessageBuf.Write([]byte(message))
 
 		// connのアドレスに送信する
-
-		// 応答を受信
+		_, err = conn.Write(fullMessageBuf.Bytes())
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	}
 }
 
-// import socket
+func readMsg(conn *net.UDPConn) {
+	for {
 
-// sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-// server_address = "0.0.0.0"
-// server_port = 9001
-
-// address = ''
-// port = 9050
-
-// username = bytes(input("Type your name: "),"utf-8")
-// message = b'Message to send to the client.'
-
-// # 空の文字列も0.0.0.0として使用できます。
-// sock.bind((address,port))
-
-// try:
-//     print('sending {!r}'.format(message))
-//     # サーバへのデータ送信
-//     sent = sock.sendto(len(username).to_bytes(1,"big")+username+message, (server_address, server_port))
-//     print('Send {} bytes'.format(sent))
-//     print(f"usernamelen: {len(username)}")
-
-//     # 応答を受信
-//     print('waiting to receive')
-//     data, server = sock.recvfrom(4096)
-//     print('received {!r}'.format(data.decode()))
-// finally:
-//     print('closing socket')
-//     sock.close()
+		readBuf := make([]byte, 4096)
+		n, _, err := conn.ReadFromUDP(readBuf)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		fmt.Println(string(readBuf[:n]))
+		// fmt.Fprintln(os.Stderr, string(readBuf[:n]))
+	}
+}
