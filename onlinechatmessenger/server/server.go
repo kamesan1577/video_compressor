@@ -65,7 +65,9 @@ func main() {
 		}
 
 		// 接続中の送信者以外のクライアントにリレーする
+		// FIXME: 同じアドレスが複数存在していてメッセージ送信時に自分のメッセージが大量に届く
 		for k, v := range clients {
+			// FIXME: 送信者のアドレスにもメッセージが送信されている
 			if v == clients[addr] {
 				continue
 			}
