@@ -20,7 +20,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	clients := map[net.Addr]client{}
+	clients := map[string]client{}
 
 	for {
 		fmt.Println("\nwaiting to receive message")
@@ -46,11 +46,13 @@ func main() {
 		fmt.Println("message: ", string(message))
 
 		// クライアント一覧になければ追加
-		// FIXME: 一覧にあるはずなのに毎回アドレスが追加される
-		_, ok := clients[addr]
+		_, ok := clients[addr.String()]
 		if !ok {
 			fmt.Println("new addr added: ", addr.String())
-			clients[addr] = client{time.Now(), 0}
+			clients[addr.String()] = client{addr, time.Now(), 0}
+
+			enterLogBuf := []byte(username + " entered")
+			broadCast(enterLogBuf, clients, conn, *addr)
 		}
 
 		for k, v := range clients {
@@ -59,33 +61,43 @@ func main() {
 			subSec := time.Now().Sub(v.LastMessageAt).Seconds()
 			timeout := 60
 			if subSec >= float64(timeout) || v.ErrorCount >= 3 {
+				exitLogBuf := []byte(username + " exited")
+				broadCast(exitLogBuf, clients, conn, *addr)
 				delete(clients, k)
 				fmt.Println("client deleted")
 			}
 		}
-
-		// 接続中の送信者以外のクライアントにリレーする
-		// FIXME: 同じアドレスが複数存在していてメッセージ送信時に自分のメッセージが大量に届く
-		for k, v := range clients {
-			// FIXME: 送信者のアドレスにもメッセージが送信されている
-			if v == clients[addr] {
-				continue
-			}
-			//kのアドレスにそうしんする
-			_, err = conn.WriteToUDP(append([]byte(fmt.Sprintf("%v: ", username)), []byte(message)...), k.(*net.UDPAddr))
-			if err != nil {
-				fmt.Println(err)
-				v = client{v.LastMessageAt, v.ErrorCount + 1}
-				return
-			}
-			v = client{time.Now(), 0}
-			fmt.Println("message sent to: ", k)
+		messageBuf := append([]byte(fmt.Sprintf("%v: ", username)), []byte(message)...)
+		err = broadCast(messageBuf, clients, conn, *addr)
+		if err != nil {
+			fmt.Println(err)
+			return
 		}
+		fmt.Println(clients)
 
+		clients[addr.String()] = client{addr, time.Now(), 0}
 	}
 }
 
 type client struct {
+	Address       *net.UDPAddr
 	LastMessageAt time.Time
 	ErrorCount    int
+}
+
+func broadCast(messageBuf []byte, clients map[string]client, conn *net.UDPConn, addr net.UDPAddr) error {
+	// 接続中の送信者以外のクライアントにリレーする
+	for k, v := range clients {
+		if k == addr.String() {
+			continue
+		}
+		//kのアドレスにそうしんする
+		_, err := conn.WriteToUDP(messageBuf, v.Address)
+		if err != nil {
+			v = client{v.Address, v.LastMessageAt, v.ErrorCount + 1}
+			return err
+		}
+		fmt.Println("message sent to: ", k)
+	}
+	return nil
 }
