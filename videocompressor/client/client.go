@@ -56,9 +56,9 @@ func (c *Client) SendFile(f *os.File) (string, error) {
 	}
 	filelen := uint32(fileStat.Size())
 	fileLenBytes := make([]byte, binary.MaxVarintLen32)
-	binary.BigEndian.PutUint32(fileLenBytes, filelen)
+	binary.LittleEndian.PutUint32(fileLenBytes, filelen)
 	//bufの最初の4バイトにfileLenBytesを入れたい
-	buf = append(buf, fileLenBytes...)
+	buf = append(fileLenBytes, buf...)
 
 	n, err := f.Read(buf)
 	if err != nil {
@@ -140,6 +140,10 @@ func main() {
 	}
 	defer file.Close()
 	// mp4かどうか確認する
+	if !strings.HasSuffix(file.Name(), ".mp4") {
+		fmt.Println("unsupported file")
+		return
+	}
 
 	c := NewClient(":9000")
 	resp, err := c.SendFile(file)

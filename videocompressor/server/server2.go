@@ -12,7 +12,7 @@ import (
 
 func receiveTCPConn(ln *net.TCPListener) {
 	for {
-		err := ln.SetDeadline(time.Now().Add(time.Second * 10))
+		err := ln.SetDeadline(time.Now().Add(time.Second * 60))
 		if err != nil {
 			log.Fatal(err)
 		}
