@@ -33,3 +33,7 @@ const (
 	StatusOK = 0
 	StatusNG = 1
 )
+
+const (
+	MAX_PACKET_SIZE int = 1400
+)
